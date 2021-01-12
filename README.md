@@ -1,5 +1,11 @@
 # Chess-Unity3D
 
+Traditional chess game developed with Unity3D
+
+**3D models outsourced**
+
+## Change Log
+
 v0.7
 
 Demo available
