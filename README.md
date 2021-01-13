@@ -25,6 +25,14 @@ To do:
     Checkmate
        
     HUD (exit, undo, etc.)
+    
+    Possible future implementations:
+        
+        - antichess mode
+        
+        - sandbox mode
+        
+        - online multiplayer
 
 ## Screenshots
 
