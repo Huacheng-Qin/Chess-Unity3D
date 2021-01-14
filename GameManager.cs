@@ -64,6 +64,7 @@ public class GameManager : MonoBehaviour
             return m_enPassant;
         }
     } // MoveHistory
+    private UIScript m_ui = new UIScript();
     private Dictionary<Vector2Int, Tile> m_grid = new Dictionary<Vector2Int, Tile>();
     private bool m_whiteTurn = true; //black turn when false
     private bool m_showingAvailableSpaces = false;
@@ -440,7 +441,7 @@ public class GameManager : MonoBehaviour
 
         if (deadPiece != null) {
             Vector3 pos = deadPiece.transform.position;
-            pos.Set(pos.x, -2.0f, pos.z);
+            pos.Set(pos.x, -5.0f, pos.z);
             deadPiece.transform.position = pos;
         }
         if (piece != null) {
@@ -591,48 +592,37 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    // Start is called before the first frame update
-    void Start() {
-        for (char x = 'a'; x <= 'h'; x++) {
-            for (char y = '1'; y <= '8'; y++) {
-                string stringCoord = x.ToString() + y.ToString();
-                Vector2Int coord = ParseCoordinates(stringCoord);
-                m_grid.Add(coord, GameObject.Find(stringCoord).GetComponent<Tile>());
-                m_grid[coord].Initialize(this, coord);
-            }
-        }
-    }
+    private bool CheckMate() {
+        GamePiece.Team team = m_whiteTurn ? GamePiece.Team.white: GamePiece.Team.black;
 
-    void Update() {
-        if (!m_pause && Input.GetMouseButtonDown(0)) {
-            RaycastHit hit;
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-
-            if (Physics.Raycast(ray, out hit, 20.0f)) {
-                if (hit.transform != null) {
-                    string name = hit.transform.gameObject.name;
-                    OnClick(name);
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                GamePiece piece = m_grid[new Vector2Int(x, y)].GetPiece();
+                if (piece != null && piece.GetTeam() == team) {
+                    piece.ShowAvailableMoves();
                 }
             }
         }
-    }
-
-    private void FixedUpdate() {
-        if (m_pause) {
-            m_counter++;
-            if (m_counter > MOVEMENT_TIMER) {
-                TurnCamera();
-                if (m_counter >= MOVEMENT_TIMER * 3) {
-                    m_counter = 0;
-                    m_pause = false;
-                    m_velocity = new Vector3(0f, 0f, 0f);
-                }
-            } else {
-                UpdatePiecePosition();
-                if (m_counter == MOVEMENT_TIMER) {
-                    PositionAdjustment();
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                if (m_grid[new Vector2Int(x, y)].IsAvailable()) {
+                    MakeAllUnavailable();
+                    return false;
                 }
             }
+        }
+
+        MakeAllUnavailable();
+        return true;
+    }
+
+    private void PrintGameOver() {
+        Vector2Int coord = m_whiteTurn ? m_whiteKing : m_blackKing;
+
+        if (SpaceInCheck(coord, m_whiteTurn ? GamePiece.Team.white: GamePiece.Team.black)) {
+            m_ui.PrintGameOver(true, m_whiteTurn ? GamePiece.Team.black : GamePiece.Team.white);
+        } else {
+            m_ui.PrintGameOver(false, GamePiece.Team.unknown);
         }
     }
 
@@ -681,6 +671,9 @@ public class GameManager : MonoBehaviour
                 m_whiteTurn = !m_whiteTurn;
                 m_showingAvailableSpaces = false;
                 m_attackingPiece = new Vector2Int(-1, -1);
+                if (CheckMate()) {
+                    PrintGameOver();
+                }
             } else {
                 GamePiece piece = m_grid[coord].GetPiece();
                 if (coord.Equals(m_attackingPiece)) {
@@ -722,6 +715,55 @@ public class GameManager : MonoBehaviour
             angle.Set(angle.x, 180.0f + 0.5f * 180.0f * (m_counter - MOVEMENT_TIMER)/(float)MOVEMENT_TIMER, angle.z);
         }
         transform.eulerAngles = angle;
+    }
+
+    public void Exit() {
+        Application.Quit();
+    }
+
+    // Start is called before the first frame update
+    void Start() {
+        for (char x = 'a'; x <= 'h'; x++) {
+            for (char y = '1'; y <= '8'; y++) {
+                string stringCoord = x.ToString() + y.ToString();
+                Vector2Int coord = ParseCoordinates(stringCoord);
+                m_grid.Add(coord, GameObject.Find(stringCoord).GetComponent<Tile>());
+                m_grid[coord].Initialize(this, coord);
+            }
+        }
+    }
+
+    void Update() {
+        if (!m_pause && Input.GetMouseButtonDown(0)) {
+            RaycastHit hit;
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+
+            if (Physics.Raycast(ray, out hit, 20.0f)) {
+                if (hit.transform != null) {
+                    string name = hit.transform.gameObject.name;
+                    OnClick(name);
+                }
+            }
+        }
+    }
+
+    private void FixedUpdate() {
+        if (m_pause) {
+            m_counter++;
+            if (m_counter > MOVEMENT_TIMER) {
+                TurnCamera();
+                if (m_counter >= MOVEMENT_TIMER * 3) {
+                    m_counter = 0;
+                    m_pause = false;
+                    m_velocity = new Vector3(0f, 0f, 0f);
+                }
+            } else {
+                UpdatePiecePosition();
+                if (m_counter == MOVEMENT_TIMER) {
+                    PositionAdjustment();
+                }
+            }
+        }
     }
 
 } // GameManager
