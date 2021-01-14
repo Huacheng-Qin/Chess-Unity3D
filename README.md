@@ -4,10 +4,6 @@ Traditional chess game developed with Unity3D
 
 **3D models outsourced**
 
-## Change Log
-
-v0.7
-
 Demo available
 
 Modes: Traditional
@@ -22,9 +18,9 @@ To do:
        
     Promotion
        
-    Checkmate
+    Checkmate - done
        
-    HUD (exit, undo, etc.)
+    HUD (exit, undo, etc.) - WIP
     
     Possible future implementations:
         
@@ -33,6 +29,23 @@ To do:
         - sandbox mode
         
         - online multiplayer
+
+## Change Log
+
+v0.8
+
+- added exit button
+
+- added checkmate detection
+
+---
+
+v0.7
+
+- first demo uploaded
+
+- scripts uploaded
+
 
 ## Screenshots
 
