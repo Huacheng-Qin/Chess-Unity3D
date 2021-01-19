@@ -37,6 +37,8 @@ v0.81
 - updated functions for clarity
 - added more comments
 
+---
+
 v0.8
 
 - added exit button
