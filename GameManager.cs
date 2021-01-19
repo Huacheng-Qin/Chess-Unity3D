@@ -64,6 +64,7 @@ public class GameManager : MonoBehaviour
             return m_enPassant;
         }
     } // MoveHistory
+
     private UIScript m_ui = new UIScript();
     private Dictionary<Vector2Int, Tile> m_grid = new Dictionary<Vector2Int, Tile>();
     private bool m_whiteTurn = true; //black turn when false
@@ -73,7 +74,7 @@ public class GameManager : MonoBehaviour
     private Vector2Int m_blackKing = new Vector2Int(4, 7);
     private Vector2Int m_enPassantSpace = new Vector2Int(-1, -1);
     private bool m_enPassantCounter = false;
-    private List<MoveHistory> m_history = new List<MoveHistory>();
+    private Stack<MoveHistory> m_history = new Stack<MoveHistory>();
     private bool m_pause = false;
     private int m_counter = 0;
     private Vector3 m_velocity = new Vector3(0f, 0f, 0f);
@@ -87,13 +88,14 @@ public class GameManager : MonoBehaviour
         return m_grid[coord].GetPiece();
     }
 
-    public void MakeAvailable(Vector2Int from, Vector2Int to) {
+    public void MakeAvailableAt(Vector2Int from, Vector2Int to) {
         if (to.x < 0 || to.y < 0 || to.x >= 8 || to.y >= 8) {
             return;
         }
 
         GamePiece piece = m_grid[from].GetPiece();
 
+        // Check if the it's the right turn
         if (piece != null) {
             if ((piece.GetTeam() == GamePiece.Team.white && !m_whiteTurn)
                 || (piece.GetTeam() == GamePiece.Team.black && m_whiteTurn)) {
@@ -101,6 +103,8 @@ public class GameManager : MonoBehaviour
             }
         }
 
+        // Perform a virtual move to see if the move is viable
+        // If said move causes the king to be in check, the move is not viable
         MovePiece(from, to, true);
         if (piece != null) {
             if (piece.GetTeam() == GamePiece.Team.white) {
@@ -116,9 +120,10 @@ public class GameManager : MonoBehaviour
             }
         }
         UndoMove();
+
+
         m_grid[to].MakeAvailable();
-        m_showingAvailableSpaces = true;
-    }
+    } // MakeAvailableAt
 
     public void MakeAllUnavailable() {
         for (int x = 0; x < 8; x++) {
@@ -127,19 +132,22 @@ public class GameManager : MonoBehaviour
             }
         }
         m_attackingPiece = new Vector2Int(-1, -1);
-        m_showingAvailableSpaces = false;
     }
 
+    // Checks the castleing availability based on a key
     public void CastleAt(King.CastleCode key) {
         int y;
         int deltaX;
         GamePiece piece = null;
 
+        // Determine the y position based on castle code
         if (key == King.CastleCode.whiteQueen || key == King.CastleCode.whiteKing) {
             y = 0;
         } else {
             y = 7;
         }
+
+        // Fetch a rook and determine x direction based on castle code
         if (key == King.CastleCode.whiteQueen || key == King.CastleCode.blackQueen) {
             piece = m_grid[new Vector2Int(0, y)].GetPiece();
             deltaX = -1;
@@ -148,10 +156,14 @@ public class GameManager : MonoBehaviour
             deltaX = 1;
         }
 
+        // If the rook is not at the initial position, or has already moved,
+        // then castling is not available
         if (piece == null || piece.HasMoved()) {
             return;
         }
 
+        // Check from the king's position to where it will end up for checks
+        // if any of those spaces are in check, castling is not available
         for (int x = 4; (x > 2 && x < 6); x += deltaX)  {
             if (y < 4) {
                 if (SpaceInCheck(new Vector2Int(x, y), GamePiece.Team.white)) {
@@ -163,37 +175,47 @@ public class GameManager : MonoBehaviour
                 }
             }
         }
+
+        // Check from the king's position to the rook's position,
+        // if any spaces are occupied, castling is not available
         for (int x = 4 + deltaX; (x > 0 && x < 7); x += deltaX) {
             if (m_grid[new Vector2Int(x, y)].GetPiece() != null) {
                 return;
             }
         }
 
+        // Make target coordinate available based on castle code
         if (key == King.CastleCode.whiteQueen) {
-            MakeAvailable(new Vector2Int(4, 0), new Vector2Int(2, 0));
+            MakeAvailableAt(new Vector2Int(4, 0), new Vector2Int(2, 0));
         } else if (key == King.CastleCode.whiteKing) {
-            MakeAvailable(new Vector2Int(4, 0), new Vector2Int(6, 0));
+            MakeAvailableAt(new Vector2Int(4, 0), new Vector2Int(6, 0));
         } else if (key == King.CastleCode.blackQueen) {
-            MakeAvailable(new Vector2Int(4, 7), new Vector2Int(2, 7));
+            MakeAvailableAt(new Vector2Int(4, 7), new Vector2Int(2, 7));
         } else if (key == King.CastleCode.blackKing) {
-            MakeAvailable(new Vector2Int(4, 7), new Vector2Int(6, 7));
+            MakeAvailableAt(new Vector2Int(4, 7), new Vector2Int(6, 7));
         }
     }
 
+    // Moves the piece and changes its position, but not visually
+    // fakeMove skips some checks needed to modify the MoveHistory that turn
     private void MovePiece(Vector2Int from, Vector2Int to, bool fakeMove = false) {
-        m_history.Insert(0, new MoveHistory(from, to, m_grid[to].GetPiece()));
+        m_history.Push(new MoveHistory(from, to, m_grid[to].GetPiece()));
+
         GamePiece piece = m_grid[from].GetPiece();
         m_grid[to].SetPiece(piece);
         m_grid[from].SetPiece(null);
+
         if (piece == null) {
             return;
         } else {
             piece.UpdateCoordinates(to);
             if (!piece.HasMoved()) {
                 piece.SetMoved();
-                m_history[0].FirstMove();
+                m_history.Peek().FirstMove();
             }
         }
+
+        // Update the king's position in manager
         if (piece.GetPieceType() == GamePiece.PieceType.king) {
             if (piece.GetTeam() == GamePiece.Team.white) {
                 m_whiteKing = to;
@@ -201,9 +223,14 @@ public class GameManager : MonoBehaviour
                 m_blackKing = to;
             }
         }
+
+        // Perform additional checks if the move is not virtual
+        // These modifications for MoveHistory are not needed for virtual moves
         if (!fakeMove) {
             if (piece.GetPieceType() == GamePiece.PieceType.pawn) {
                 GamePiece.Team team = piece.GetTeam();
+
+                // If the pawn moved 2 spaces at once, set en passant available
                 if (team == GamePiece.Team.white && (to.y - from.y) == 2) {
                     SetEnPassantSpace(new Vector2Int(to.x, to.y - 1));
                     m_enPassantCounter = true;
@@ -211,30 +238,38 @@ public class GameManager : MonoBehaviour
                     SetEnPassantSpace(new Vector2Int(to.x, to.y + 1));
                     m_enPassantCounter = true;
                 }
+
+                // If the pawn has reached the end, promote
                 if ((team == GamePiece.Team.white && to.y == 7) 
                     || (team == GamePiece.Team.black && to.y == 0)) {
                     Promotion(to);
-                    m_history[0].Promotion();
+                    m_history.Peek().Promotion();
                 }
+
+                // If the pawn is performing an en passant,
+                // remove the defending piece and commit to MoveHistory
                 if (to.Equals(m_enPassantSpace)) {
                     Tile enPasTile = null;
                     if (team == GamePiece.Team.white) {
                         enPasTile = m_grid[new Vector2Int(to.x, to.y - 1)];
-                        m_history[0].EnPassant(enPasTile.GetPiece(), -1);
+                        m_history.Peek().EnPassant(enPasTile.GetPiece(), -1);
                     } else if (team == GamePiece.Team.black) {
                         enPasTile = m_grid[new Vector2Int(to.x, to.y + 1)];
-                        m_history[0].EnPassant(enPasTile.GetPiece(), 1);
+                        m_history.Peek().EnPassant(enPasTile.GetPiece(), 1);
                     }
                     if (enPasTile != null) {
                         enPasTile.SetPiece(null);
                     }
                 }
-            }
+            } // Pawn checks
             if (piece.GetPieceType() == GamePiece.PieceType.king) {
+                // Commit castling to MoveHistory if the king moved more than 1 space
                 if (Mathf.Abs((float)(to.x - from.x)) > 1.5f) {
                     King.CastleCode key;
                     GamePiece rook = null;
                     Vector2Int coord = new Vector2Int(-1, to.y);
+
+                    // Determine the castle code and rook position based on the king position
                     if (to.x < 4) {
                         if (to.y == 0) {
                             key = King.CastleCode.whiteQueen;
@@ -257,13 +292,14 @@ public class GameManager : MonoBehaviour
                         coord.x = 5;
                     }
 
+                    // Update rook position
                     m_grid[coord].SetPiece(rook);
                     rook.transform.name = m_grid[coord].transform.name;
                     rook.UpdateCoordinates(coord);
                     rook.SetMoved();
-                    m_history[0].CastleTurn(key);
+                    m_history.Peek().CastleTurn(key);
                 }
-            }
+            } // Castle check
         } // special checks
     } // MovePiece
 
@@ -272,17 +308,17 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        MoveHistory lastMove = m_history[0];
-        m_history.RemoveAt(0);
+        MoveHistory lastMove = m_history.Pop();
 
+        // Perform additional undo sequences based on MoveHistory
         if (lastMove.Promoted()) {
             GamePiece newPawn = new Pawn();
             newPawn.SetMoved();
             m_grid[lastMove.Attacker()].SetPiece(newPawn);
-
         } else {
             m_grid[lastMove.Attacker()].SetPiece(m_grid[lastMove.Defender()].GetPiece());
         }
+
         if (lastMove.IsEnPassant() != 0) {
             m_grid[new Vector2Int(lastMove.Defender().x, lastMove.Defender().y + lastMove.IsEnPassant())].SetPiece(lastMove.DefendingPiece());
         } else {
@@ -293,6 +329,7 @@ public class GameManager : MonoBehaviour
         if (piece != null) {
             piece.UpdateCoordinates(lastMove.Attacker());
         }
+        // Update king position in manager
         if (piece != null && piece.GetPieceType() == GamePiece.PieceType.king) {
             if (piece.GetTeam() == GamePiece.Team.white) {
                 m_whiteKing = lastMove.Attacker();
@@ -300,21 +337,25 @@ public class GameManager : MonoBehaviour
                 m_blackKing = lastMove.Attacker();
             }
         }
+
         if (lastMove.IsFirstMove()) {
             piece.UnsetMove();
         }
 
+        // If it was a castle turn, move rook as well
         if (lastMove.IsCastleTurn() != King.CastleCode.unknown) {
             King.CastleCode key = lastMove.IsCastleTurn();
             Vector2Int coord = new Vector2Int(-1, -1);
             GamePiece rook = null;
 
+            // Determine y coordinate based on castle code
             if (key == King.CastleCode.whiteQueen || key == King.CastleCode.whiteKing) {
                 coord.y = 0;
             } else {
                 coord.y = 7;
             }
 
+            // Determine x coordinate based on castle code, fetch rook
             if (key == King.CastleCode.whiteQueen || key == King.CastleCode.blackQueen) {
                 coord.x = 3;
                 rook = m_grid[coord].GetPiece();
@@ -331,11 +372,13 @@ public class GameManager : MonoBehaviour
             rook.UnsetMove();
         }
 
+        // Actually move the pieces if this was not part of a virtual move
         if (visual) {
             UndoVisual(lastMove);
         }
     }
 
+    // Move the actual GameObjects tied to the pieces
     private void UndoVisual(MoveHistory history) {
         GamePiece deadPiece = history.DefendingPiece();
         Tile target = m_grid[history.Attacker()];
@@ -343,18 +386,22 @@ public class GameManager : MonoBehaviour
 
         if (deadPiece != null) {
             Vector3 pos = deadPiece.transform.position;
-            pos.Set(pos.x, 0f, pos.z);
+            pos.y = 0f;
             deadPiece.transform.position = pos;
         }
         if (piece != null) {
             Vector3 pos = target.transform.position;
-            pos.Set(pos.x, 0f, pos.z);
+            pos.y = 0f;
             piece.transform.position = pos;
             piece.name = target.name;
         }
+
+        // Unset en passant availability
         if (m_enPassantSpace.x != -1) {
             m_enPassantSpace = new Vector2Int(-1, -1);
         }
+
+        // Set rook position if the the move was a castle
         if (history.IsCastleTurn() != King.CastleCode.unknown) {
             if (history.IsCastleTurn() == King.CastleCode.whiteQueen) {
                 target = m_grid[new Vector2Int(0, 0)];
@@ -367,19 +414,20 @@ public class GameManager : MonoBehaviour
             }
             piece = target.GetPiece();
             Vector3 pos = target.transform.position;
-            pos.Set(pos.x, 0f, pos.z);
+            pos.y = 0f;
             piece.transform.position = pos;
             piece.name = target.name;
         }
         m_pause = true;
     }
 
+    // Calculates how far a piece moves per frame
     private void CalculateVelocity() {
         if (m_history.Count == 0) {
             return;
         }
 
-        MoveHistory lastMove = m_history[0];
+        MoveHistory lastMove = m_history.Peek();
         Tile tile = m_grid[lastMove.Defender()];
         GamePiece piece = tile.GetPiece();
 
@@ -392,12 +440,13 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // Moves the GameObject for the attacking piece based on the velocity
     private void UpdatePiecePosition() {
         if (m_history.Count == 0) {
             return;
         }
 
-        GamePiece piece = m_grid[m_history[0].Defender()].GetPiece();
+        GamePiece piece = m_grid[m_history.Peek().Defender()].GetPiece();
 
         if (piece != null) {
             Vector3 pos = piece.transform.position;
@@ -405,8 +454,9 @@ public class GameManager : MonoBehaviour
             piece.transform.position = pos;
         }
 
-        if (m_history[0].IsCastleTurn() != King.CastleCode.unknown) {
-            King.CastleCode key = m_history[0].IsCastleTurn();
+        // Move the rook as well if it's a castle turn
+        if (m_history.Peek().IsCastleTurn() != King.CastleCode.unknown) {
+            King.CastleCode key = m_history.Peek().IsCastleTurn();
             if (key == King.CastleCode.whiteQueen) {
                 piece = m_grid[new Vector2Int(3, 0)].GetPiece();
             } else if (key == King.CastleCode.whiteKing) {
@@ -429,12 +479,15 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // At the end of the moving turn, set the position of the attacking
+    // piece to be exactly at the right tile, in case of floating-point errors
+    // Also moves the defending piece below the board
     private void PositionAdjustment() {
         if (m_history.Count < 1) {
             return;
         }
 
-        MoveHistory LastMove = m_history[0];
+        MoveHistory LastMove = m_history.Peek();
         GamePiece deadPiece = LastMove.DefendingPiece();
         Tile target = m_grid[LastMove.Defender()];
         GamePiece piece = target.GetPiece();
@@ -466,9 +519,10 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
+    // Checks if the given coordinate is in check for a given team
     public bool SpaceInCheck(Vector2Int coord, GamePiece.Team team) {
         bool singleSpace = false;
-        int helper2 = 1;
+        int helper2 = 1;    // code for CheckHelper2
         GamePiece.PieceType targetPieceType = 0;
 
         // Check for cardinal directions recursively
@@ -493,7 +547,6 @@ public class GameManager : MonoBehaviour
         targetPieceType = CheckHelper(coord, -1, 1, team, ref singleSpace);
         if (CheckHelper2(targetPieceType, helper2, singleSpace)) {return true;}
         targetPieceType = CheckHelper(coord, -1, -1, team, ref singleSpace);
-
         if (team == GamePiece.Team.black) {
             helper2 = 2;
         } else if (team == GamePiece.Team.white) {
@@ -502,7 +555,7 @@ public class GameManager : MonoBehaviour
         if (CheckHelper2(targetPieceType, helper2, singleSpace)) {return true;}
         targetPieceType = CheckHelper(coord, 1, -1, team, ref singleSpace);
         if (CheckHelper2(targetPieceType, helper2, singleSpace)) {return true;}
-        
+
         // Check for knight positions
         GamePiece targetPiece = GetPieceAt(new Vector2Int(coord.x + 2, coord.y + 1));
         if (targetPiece != null && targetPiece.GetTeam() != team 
@@ -547,6 +600,9 @@ public class GameManager : MonoBehaviour
         return false;
     } // SpaceInCheck
 
+    // Loops in a given direction and returns the first GamePiece hit
+    // singleSpace is used to determine whether or not CheckHelper2 needs
+    // to check for king and pawn
     private GamePiece.PieceType CheckHelper(Vector2Int startingCoord, int deltaX, int deltaY, GamePiece.Team team, ref bool singleSpace) {
         int x = startingCoord.x + deltaX;
         int y = startingCoord.y + deltaY;
@@ -573,7 +629,7 @@ public class GameManager : MonoBehaviour
         switch(direction) {
         case 1:
             if (type == GamePiece.PieceType.queen || type == GamePiece.PieceType.rook
-                || (type == GamePiece.PieceType.king && singleSpace)) {
+                || (singleSpace && type == GamePiece.PieceType.king)) {
                 return true;
             } break;
         case 2: 
@@ -592,6 +648,7 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
+    // Based on whose turn it is, check for available moves
     private bool CheckMate() {
         GamePiece.Team team = m_whiteTurn ? GamePiece.Team.white: GamePiece.Team.black;
 
@@ -616,6 +673,8 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
+    // Determine if the result is a checkmate or stalemate,
+    // and prints the result to the screen
     private void PrintGameOver() {
         Vector2Int coord = m_whiteTurn ? m_whiteKing : m_blackKing;
 
@@ -626,13 +685,14 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // Highlight the available spaces
     private void ShowAvailableSpaces() {
         bool flag = false;
         for (int x = 0; x < 8; x++) {
             for (int y = 0; y < 8; y++) {
                 Tile tile = m_grid[new Vector2Int(x, y)];
                 tile.ShowAvailable();
-                if (tile.IsAvailable()) {
+                if (tile.IsAvailable() && !flag) {
                     flag = true;
                 }
             }
@@ -642,22 +702,30 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // Perform on click actions based on the name of the GameObject clicked
     private void OnClick(string name) {
+        // perform undo
         if (name == "Board" && m_history.Count > 0) {
             m_whiteTurn = !m_whiteTurn;
             UndoMove(true);
             if(m_enPassantSpace.x != -1) {
                 m_enPassantSpace = new Vector2Int(-1, -1);
             }
+            return;
         }
+
         Vector2Int coord = ParseCoordinates(name);
 
         if (!m_grid.ContainsKey(coord)) {
             return;
         }
 
+        // m_showingAvailableSpaces is true when a piece is already selected
+        // and displaying viable moves
         if (m_showingAvailableSpaces) {
+            // Check availability at target coordinate
             if (m_grid[coord].IsAvailable()) {
+                // Move piece and perform all end of turn actions
                 MovePiece(m_attackingPiece, coord);
                 CalculateVelocity();
                 MakeAllUnavailable();
@@ -675,6 +743,9 @@ public class GameManager : MonoBehaviour
                     PrintGameOver();
                 }
             } else {
+                // Since the target position is not available,
+                // stop showing available moves or show available
+                // moves for the target piece instead
                 GamePiece piece = m_grid[coord].GetPiece();
                 if (coord.Equals(m_attackingPiece)) {
                     piece = null;
@@ -688,6 +759,9 @@ public class GameManager : MonoBehaviour
                         || (piece.GetTeam() == GamePiece.Team.black && !m_whiteTurn)) {
                         piece.ShowAvailableMoves();
                         m_attackingPiece = coord;
+                    } else {
+                        m_showingAvailableSpaces = false;
+                        m_attackingPiece = new Vector2Int(-1, -1);
                     }
                 }
             }
@@ -706,6 +780,7 @@ public class GameManager : MonoBehaviour
         return new Vector2Int((int)(key[0] - 'a'), (int)(key[1] - '1'));
     }
 
+    // Turns the camera by 180 degrees, in 2*MOVEMENT_TIMER frames
     private void TurnCamera() {
         Vector3 angle = transform.eulerAngles;
         
@@ -733,6 +808,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // If the game is not paused, check if the player has clicked on an object
     void Update() {
         if (!m_pause && Input.GetMouseButtonDown(0)) {
             RaycastHit hit;
@@ -747,6 +823,8 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // If the game is paused, turn the camera and
+    // move the pieces for this turn
     private void FixedUpdate() {
         if (m_pause) {
             m_counter++;

@@ -11,14 +11,16 @@ public class King : GamePiece
     }
 
     override public void ShowAvailableMoves() {
-        RecursiveMove(new Vector2Int(m_coord.x + 1, m_coord.y));
-        RecursiveMove(new Vector2Int(m_coord.x + 1, m_coord.y + 1));
-        RecursiveMove(new Vector2Int(m_coord.x, m_coord.y + 1));
-        RecursiveMove(new Vector2Int(m_coord.x - 1, m_coord.y + 1));
-        RecursiveMove(new Vector2Int(m_coord.x - 1, m_coord.y));
-        RecursiveMove(new Vector2Int(m_coord.x - 1, m_coord.y - 1));
-        RecursiveMove(new Vector2Int(m_coord.x, m_coord.y - 1));
-        RecursiveMove(new Vector2Int(m_coord.x + 1, m_coord.y - 1));
+        CheckAvailabilityAt(new Vector2Int(m_coord.x + 1, m_coord.y));
+        CheckAvailabilityAt(new Vector2Int(m_coord.x + 1, m_coord.y + 1));
+        CheckAvailabilityAt(new Vector2Int(m_coord.x, m_coord.y + 1));
+        CheckAvailabilityAt(new Vector2Int(m_coord.x - 1, m_coord.y + 1));
+        CheckAvailabilityAt(new Vector2Int(m_coord.x - 1, m_coord.y));
+        CheckAvailabilityAt(new Vector2Int(m_coord.x - 1, m_coord.y - 1));
+        CheckAvailabilityAt(new Vector2Int(m_coord.x, m_coord.y - 1));
+        CheckAvailabilityAt(new Vector2Int(m_coord.x + 1, m_coord.y - 1));
+
+        // If the king hasn't moved, check castling availability
         if (!m_moved) {
             if (m_team == Team.white) {
                 m_manager.CastleAt(CastleCode.whiteQueen);

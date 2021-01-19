@@ -70,7 +70,11 @@ public class Tile : MonoBehaviour
 
     public void ShowAvailable() {
         if(m_available) {
-            this.GetComponent<Renderer>().material.color = Color.cyan;
+            if (m_piece != null) {
+                this.GetComponent<Renderer>().material.color = Color.red;
+            } else {
+                this.GetComponent<Renderer>().material.color = Color.cyan;
+            }
         } else {
             this.GetComponent<Renderer>().material.color = m_color;
         }

@@ -14,6 +14,8 @@ public class GamePiece : MonoBehaviour
     public void Initialize(GameManager manager, Vector2Int coord, bool promotion = false) {
         m_manager = manager;
         m_coord = coord;
+        
+        // If the piece is initialized because of a promotion, swap the team
         if (promotion) {
             if (m_coord.y < 3) {
                 m_team = Team.black;
@@ -58,16 +60,17 @@ public class GamePiece : MonoBehaviour
         m_coord = coord;
     }
 
-    protected bool RecursiveMove(Vector2Int coord) {
+    // Check at a coordinate to see if it is available (empty or enemy piece)
+    protected bool CheckAvailabilityAt(Vector2Int coord) {
         if (coord.x < 0 || coord.y < 0 || coord.x >= 8 || coord.y >= 8) {
             return false;
         }
         GamePiece targetPiece = m_manager.GetPieceAt(coord);
         if (targetPiece == null) {
-            m_manager.MakeAvailable(m_coord, coord);
+            m_manager.MakeAvailableAt(m_coord, coord);
         } else {
             if (targetPiece.GetTeam() != m_team) {
-                m_manager.MakeAvailable(m_coord, coord);
+                m_manager.MakeAvailableAt(m_coord, coord);
             }
             return false;
         }
